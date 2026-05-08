@@ -9,6 +9,16 @@ from cocotb.triggers import ClockCycles, RisingEdge
 # SPI Utilities
 ############################################################
 
+def change_mosi(dut, mosi: int):
+    dut.ui_in.value = ((int(dut.ui_in.value) & ~(1 << 0)) | ((mosi & 1) << 0))  
+
+def change_sclk(dut, sclk: int):
+    dut.ui_in.value = ((int(dut.ui_in.value) & ~(1 << 1)) | ((sclk & 1) << 1))  
+
+def change_ss(dut, ss: int):
+    dut.ui_in.value = ((int(dut.ui_in.value) & ~(1 << 2)) | ((ss & 1) << 2))  
+
+
 async def spi_transfer_16(dut, tx_data):
     """
     SPI MODE 0
@@ -19,17 +29,17 @@ async def spi_transfer_16(dut, tx_data):
     rx_data = 0
     for i in range(15, -1, -1):
         # Data valid before rising edge
-        dut.ui_in[0].value = ((tx_data >> i) & 0x1) #MOSI
+        change_mosi(dut, ((tx_data >> i) & 0x1))
         # Half cycle
         await ClockCycles(dut.clk, 18)
         # Rising edge SCLK
-        dut.ui_in[1].value = 1 
+        change_sclk(dut, 1) 
         # Sample MISO
-        rx_data = ((rx_data << 1) | int(dut.uo_out[0].value))
+        rx_data = ((rx_data << 1) | (int(dut.uo_out.value)&1))
         # Half cycle
         await ClockCycles(dut.clk, 18)
         # Falling edge SCLK
-        dut.ui_in[1].value = 0 
+        change_sclk(dut, 0) 
     return rx_data
 
 ############################################################
@@ -47,9 +57,7 @@ async def test_project(dut):
     # Reset
     dut._log.info("Reset")
     dut.ena.value = 1
-    dut.ui_in[0].value = 0  #MOSI
-    dut.ui_in[1].value = 0  #SCLK
-    dut.ui_in[2].value = 1  #SS
+    dut.ui_in.value = 4  #MOSI=0, SCLK=0, SS=1
     dut.rst_n.value = 0
     await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
@@ -60,14 +68,14 @@ async def test_project(dut):
 
     dut._log.info("SPI TEST: SUM ACC=0.0")
 
-    dut.ui_in[2].value = 0
+    change_ss(dut, 0)
     rx1 = await spi_transfer_16(dut, 0b0000_0000_0000_0000)
     rx2 = await spi_transfer_16(dut, 0x4040)  # 3.0
     rx3 = await spi_transfer_16(dut, 0x4000)  # 2.0
     rx4 = await spi_transfer_16(dut, 0x3DCC)  # 0.1
     rx5 = await spi_transfer_16(dut, 0x0000)  # dummy
-    dut.ui_in[2].value = 1
-
+    change_ss(dut, 1)
+    
     assert rx1 == 0x0000, (f"ERROR rx0: expected=0x0000 received=0x{rx1:04X}")
     assert rx2 == 0x0000, (f"ERROR rx0: expected=0x0000 received=0x{rx2:04X}")
     assert rx3 == 0x4040, (f"ERROR rx0: expected=0x4040 received=0x{rx3:04X}")
@@ -83,13 +91,13 @@ async def test_project(dut):
 
     dut._log.info("SPI TEST: SUB ACC=1.0")
 
-    dut.ui_in[2].value = 0
+    change_ss(dut, 0)
     rx1 = await spi_transfer_16(dut, 0b1000_0001_0000_0000)
     rx2 = await spi_transfer_16(dut, 0x4040)  # 3.0
     rx3 = await spi_transfer_16(dut, 0x4000)  # 2.0
     rx4 = await spi_transfer_16(dut, 0x3DCC)  # 0.1
     rx5 = await spi_transfer_16(dut, 0x0000)  # dummy
-    dut.ui_in[2].value = 1
+    change_ss(dut, 1)
 
     assert rx1 == 0x40A3, (f"ERROR rx0: expected=0x0000 received=0x{rx1:04X}")
     assert rx2 == 0x3F80, (f"ERROR rx0: expected=0x3F80 received=0x{rx2:04X}")
@@ -106,13 +114,13 @@ async def test_project(dut):
 
     dut._log.info("SPI TEST: MPY ACC=0.0")
 
-    dut.ui_in[2].value = 0
+    change_ss(dut, 0)
     rx1 = await spi_transfer_16(dut, 0b0001_0000_0000_0000)
     rx2 = await spi_transfer_16(dut, 0x4040)  # 3.0
     rx3 = await spi_transfer_16(dut, 0x4000)  # 2.0
     rx4 = await spi_transfer_16(dut, 0x3DCC)  # 0.1
     rx5 = await spi_transfer_16(dut, 0x0000)  # dummy
-    dut.ui_in[2].value = 1
+    change_ss(dut, 1)
 
     assert rx1 == 0xC083, (f"ERROR rx0: expected=0x0000 received=0x{rx1:04X}")
     assert rx2 == 0x0000, (f"ERROR rx0: expected=0x0000 received=0x{rx2:04X}")
@@ -128,13 +136,13 @@ async def test_project(dut):
 
     dut._log.info("SPI TEST: MPY ACC=1.0")
 
-    dut.ui_in[2].value = 0
+    change_ss(dut, 0)
     rx1 = await spi_transfer_16(dut, 0b0001_0001_0000_0000)
     rx2 = await spi_transfer_16(dut, 0x4040)  # 3.0
     rx3 = await spi_transfer_16(dut, 0x4000)  # 2.0
     rx4 = await spi_transfer_16(dut, 0x3DCC)  # 0.1
     rx5 = await spi_transfer_16(dut, 0x0000)  # dummy
-    dut.ui_in[2].value = 1
+    change_ss(dut, 1)
 
     await ClockCycles(dut.clk, 500)
 
