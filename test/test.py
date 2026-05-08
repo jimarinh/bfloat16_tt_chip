@@ -35,7 +35,7 @@ async def spi_transfer_16(dut, tx_data):
         # Rising edge SCLK
         change_sclk(dut, 1) 
         # Sample MISO
-        rx_data = ((rx_data << 1) | (int(dut.uo_out.value)&1))
+        rx_data = ((rx_data << 1) | int(dut.uo_out.value.binstr[-1]))
         # Half cycle
         await ClockCycles(dut.clk, 18)
         # Falling edge SCLK
